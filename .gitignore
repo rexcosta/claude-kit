@@ -1,0 +1,12 @@
+# macOS and editors
+.DS_Store
+*~
+*.swp
+
+# Claude Code settings that are only for one person on one computer
+**/.claude/settings.local.json
+
+# Files that Claude Code writes into a mod folder
+**/.claude-plugin/types/
+**/.mcpb-cache/
+*.log

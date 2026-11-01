@@ -1,0 +1,13 @@
+{
+  "name": "header-title",
+  "version": "0.1.0",
+  "description": "A band above the prompt: the session name from /rename, path, usage and status",
+  "author": {
+    "name": "rexcosta",
+    "url": "https://github.com/rexcosta"
+  },
+  "homepage": "https://github.com/rexcosta/claude-kit/tree/main/plugins/header-title",
+  "repository": "https://github.com/rexcosta/claude-kit",
+  "license": "MIT",
+  "types": "./types/index.d.ts"
+}

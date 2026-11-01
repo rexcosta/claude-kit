@@ -1,0 +1,17 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "claude-kit",
+  "description": "Skills, mods and dashboards for Claude Code",
+  "owner": {
+    "name": "rexcosta"
+  },
+  "plugins": [
+    {
+      "name": "header-title",
+      "description": "A band above the prompt: the session name from /rename, path, usage and status",
+      "source": "./plugins/header-title",
+      "category": "productivity",
+      "homepage": "https://github.com/rexcosta/claude-kit/tree/main/plugins/header-title"
+    }
+  ]
+}

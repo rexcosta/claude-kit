@@ -16,3 +16,6 @@ ste100-dictionary.json
 
 # Python bytecode
 __pycache__/
+
+# The specifications and plans of the superpowers plugin
+/docs/superpowers/

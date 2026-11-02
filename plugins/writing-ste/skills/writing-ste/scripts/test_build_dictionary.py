@@ -414,6 +414,11 @@ class RealDictionaryTest(unittest.TestCase):
     def test_each_approved_entry_has_a_meaning(self):
         self.assertEqual([e["word"] for e in self.data["approved"] if not e["meaning"]], [])
 
+    def test_the_general_word_list_has_no_errors(self):
+        words = ste_check.ProjectWords.parse(ste_check.GENERAL_WORDS.read_text(encoding="utf-8"))
+        findings = words.validate(ste_check.Dictionary(self.data))
+        self.assertEqual([f.message for f in findings if f.level == "ERROR"], [])
+
     def test_the_test_files_contain_no_text_of_the_dictionary(self):
         texts = set()
         for kind in ("approved", "not_approved"):

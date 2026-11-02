@@ -15,7 +15,8 @@ blocks, inline code, URLs, or text in quotation marks (rule 8.6: quoted text
 counts as one word). The checker reads two word lists of technical nouns (TN)
 and technical verbs (TV): the general word list of the plugin
 (data/ste-word-list.md) and the word list of the user (ste-word-list.md in the
-data folder). All projects use the same two word lists.
+data folder). All projects use the same two word lists. The checker gives findings
+only for the word list of the user: the tests of the plugin examine the general list.
 
 Each finding is an ERROR (the text does not obey a rule) or a REVIEW item (a
 person must examine the word: its part of speech or its meaning). The exit code
@@ -704,22 +705,28 @@ def main(argv=None):
     except DictionaryError as e:
         print(e)
         return 2
-    lists = []
-    for given, default in ((args.general_words, GENERAL_WORDS), (args.words, data / WORDS_FILE)):
-        path = Path(given) if given else default
-        if given and not path.exists():
-            print("No word list at %s." % path)
-            return 2
-        if path.exists():
-            lists.append((path, ProjectWords.parse(path.read_text(encoding="utf-8"))))
-    words = ProjectWords([e for _, part in lists for e in part.entries])
-    if args.lookup:
-        for word in args.lookup:
-            print(lookup(word, dictionary, words))
-        return 0
-    results = [(path, part.validate(dictionary)) for path, part in lists]
-    results += [(path, check_text(Path(path).read_text(encoding="utf-8"), dictionary, words))
-                for path in args.files]
+    try:
+        lists = []
+        for given, default, own in ((args.general_words, GENERAL_WORDS, False),
+                                    (args.words, data / WORDS_FILE, True)):
+            path = Path(given) if given else default
+            if given and not path.exists():
+                print("No word list at %s." % path)
+                return 2
+            if path.exists():
+                lists.append((path, ProjectWords.parse(read_file(path)), own))
+        words = ProjectWords([e for _, part, _ in lists for e in part.entries])
+        if args.lookup:
+            for word in args.lookup:
+                print(lookup(word, dictionary, words))
+            return 0
+        texts = [(path, read_file(path)) for path in args.files]
+    except ReadError as e:
+        print(e)
+        return 2
+    # The user cannot change the general word list, so only their own list gives findings.
+    results = [(path, part.validate(dictionary)) for path, part, own in lists if own]
+    results += [(path, check_text(text, dictionary, words)) for path, text in texts]
     errors = reviews = 0
     unknown = False
     for path, findings in results:

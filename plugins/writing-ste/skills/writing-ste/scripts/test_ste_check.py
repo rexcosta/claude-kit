@@ -7,7 +7,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from ste_check import Dictionary, ProjectWords, check_text, default_data_folder, main
+from ste_check import (GENERAL_WORDS, Dictionary, ProjectWords, check_text, default_data_folder,
+                       main, plural_forms, regular_verb_forms)
 
 
 def approved(word, pos, forms=(), meaning="", restricted=False,
@@ -484,6 +485,17 @@ class MainTest(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("text.md:3:", out)
 
+    def test_file_that_the_checker_cannot_read_gives_exit_code_2(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            missing = Path(tmp) / "missing.md"
+            not_utf8 = Path(tmp) / "not-utf8.md"
+            not_utf8.write_bytes(b"\xff Remove the cap.\n")
+            for path in (missing, not_utf8):
+                with self.subTest(path=path.name):
+                    code, out = self.run_main("", str(path))
+                    self.assertEqual(code, 2)
+                    self.assertIn("cannot read %s" % path, out)
+
 
 
 HEADER = "| Word | Type | Category | Forms | Information |\n|---|---|---|---|---|\n"
@@ -526,12 +538,22 @@ class WordListsTest(unittest.TestCase):
                                            HEADER + "| Slack | TN | 11 | | |\n", user)
                 self.assertEqual(code, 0, out)
 
-    def test_findings_of_each_list_give_the_file_of_the_list(self):
+    def test_only_the_word_list_of_the_user_gives_findings(self):
         code, out = self.run_lists("Remove the cap.\n", HEADER + "| valve | TN | 1 | | |\n",
                                    HEADER + "| trel | TN | 19 | | |\n")
-        self.assertEqual(code, 1)
-        self.assertIn("general.md:3: ERROR", out)
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("general.md", out)
         self.assertIn("ste-word-list.md:3: REVIEW", out)
+        self.assertIn("STE check: 0 errors, 1 items to review.", out)
+
+    def test_word_list_that_is_not_utf8_gives_exit_code_2(self):
+        bad = b"\xff" + HEADER.encode()
+        for general, user, name in ((bad, HEADER, "general.md"), (HEADER, bad, "ste-word-list.md")):
+            with self.subTest(name=name):
+                code, out = self.run_lists("Remove the cap.\n", general, user)
+                self.assertEqual(code, 2)
+                self.assertIn("cannot read", out)
+                self.assertIn(name, out)
 
     def test_word_in_the_two_lists_is_permitted(self):
         row = "| token | TN | 19 | | |\n"
@@ -543,6 +565,27 @@ class WordListsTest(unittest.TestCase):
                                    "--lookup", "token")
         self.assertEqual(code, 0)
         self.assertIn("token (TN, category 19) is in a word list.", out)
+
+    def test_lookup_gives_each_row_of_a_word_with_two_meanings(self):
+        rows = "| subject | TN | 15 | | |\n| subject | TN | 19 | | |\n"
+        code, out = self.run_lists("", HEADER, HEADER + rows, "--lookup", "subject")
+        self.assertEqual(code, 0)
+        self.assertIn("subject (TN, category 15) is in a word list.", out)
+        self.assertIn("subject (TN, category 19) is in a word list.", out)
+
+    def test_lookup_gives_a_row_that_is_in_the_two_lists_one_time(self):
+        row = "| token | TN | 19 | | |\n"
+        _, out = self.run_lists("", HEADER + row, HEADER + row, "--lookup", "token")
+        self.assertEqual(out.count("is in a word list"), 1, out)
+
+
+class GeneralWordListTest(unittest.TestCase):
+    def test_forms_column_gives_only_the_forms_that_the_checker_cannot_make(self):
+        words = ProjectWords.parse(GENERAL_WORDS.read_text(encoding="utf-8"))
+        made = {"TN": plural_forms, "TV": regular_verb_forms}
+        redundant = [(e["line"], e["word"], form) for e in words.entries for form in e["forms"]
+                     if e["type"] in made and form in made[e["type"]](e["word"].lower())]
+        self.assertEqual(redundant, [])
 
 
 if __name__ == "__main__":

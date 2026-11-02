@@ -12,6 +12,13 @@
       "source": "./plugins/header-title",
       "category": "productivity",
       "homepage": "https://github.com/rexcosta/claude-kit/tree/main/plugins/header-title"
+    },
+    {
+      "name": "writing-ste",
+      "description": "Write texts in ASD-STE100 Simplified Technical English, with a checker. You make the dictionary file from the ASD-STE100 PDF.",
+      "source": "./plugins/writing-ste",
+      "category": "productivity",
+      "homepage": "https://github.com/rexcosta/claude-kit/tree/main/plugins/writing-ste"
     }
   ]
 }

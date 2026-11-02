@@ -7,6 +7,7 @@ This repository is a marketplace of plugins for Claude Code. The plugins add ski
 | Plugin | Type | Function |
 |---|---|---|
 | [`header-title`](plugins/header-title) | Mod | Shows a band above the prompt. The band shows the name of the session, the folder, the limits, and the status. |
+| [`writing-ste`](plugins/writing-ste) | Skill | Writes texts in ASD-STE100 Simplified Technical English (STE). It also does the STE check of a text. |
 
 The `README.md` file of each plugin gives the full procedure to install it and to use it.
 

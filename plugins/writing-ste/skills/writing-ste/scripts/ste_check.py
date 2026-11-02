@@ -1,7 +1,14 @@
 """Check a text against ASD-STE100 Simplified Technical English (STE).
 
 Usage:
-    python3 ste_check.py [--words FILE] [--dictionary FILE] FILE...
+    python3 ste_check.py [--data FOLDER] [--words FILE] [--dictionary FILE] FILE...
+    python3 ste_check.py [--data FOLDER] --lookup WORD...
+    python3 ste_check.py [--data FOLDER] --status
+
+The data folder of the plugin (default: $CLAUDE_PLUGIN_DATA, or
+~/.claude/plugins/data/writing-ste-claude-kit) contains the dictionary file
+ste100-dictionary.json. With --status, the checker does only the dictionary
+check: the output starts with OK or ERROR, and the exit code is always 0.
 
 The checker reads Markdown or plain text. It does not check front matter, code
 blocks, inline code, URLs, or text in quotation marks (rule 8.6: quoted text
@@ -15,6 +22,7 @@ is 1 if there are errors, 0 if there are none, and 2 for a usage error.
 """
 import argparse
 import json
+import os
 import re
 import sys
 from collections import namedtuple
@@ -22,7 +30,10 @@ from html import unescape
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-DEFAULT_DICTIONARY = HERE.parent / "data" / "ste100-dictionary.json"
+PLUGIN_ID = "writing-ste-claude-kit"
+DICTIONARY_FILE = "ste100-dictionary.json"
+WORDS_FILE = "ste-word-list.md"
+ASD_URL = "https://www.asd-ste100.org"
 DEFAULT_WORDS = Path("docs") / "ste-word-list.md"
 
 INSTRUCTION_LIMIT = 20  # rule 5.1
@@ -122,6 +133,7 @@ class Dictionary:
     """The words of the ASD-STE100 dictionary, from build_dictionary.py."""
 
     def __init__(self, data):
+        self.source = data.get("source") or "ASD-STE100"
         self.approved, self.phrases, self.not_approved, self.verbs = {}, {}, {}, set()
         for e in data["approved"]:
             forms = [e["word"]] + list(e.get("forms") or [])
@@ -176,6 +188,63 @@ def replacement(entry):
     else:
         text = "use a different word or construction."
     return "%s See dictionary page %s." % (text, entry["page"])
+
+
+def default_data_folder():
+    """Return the data folder of the plugin, which stays after each update."""
+    if os.environ.get("CLAUDE_PLUGIN_DATA"):
+        return Path(os.environ["CLAUDE_PLUGIN_DATA"])
+    return Path.home() / ".claude" / "plugins" / "data" / PLUGIN_ID
+
+
+class DictionaryError(Exception):
+    """The dictionary file is missing or not correct. The text tells how to make it."""
+
+
+def dictionary_error(path, missing):
+    if missing:
+        first = "ERROR: The ASD-STE100 dictionary is not installed."
+    else:
+        first = ("ERROR: The dictionary file is not correct: %s\n\n"
+                 "Make the dictionary file again." % path)
+    return "\n".join([
+        first,
+        "",
+        "1. Get the ASD-STE100 PDF file from %s." % ASD_URL,
+        "2. On a Mac, use this command:",
+        '   python3 -I "%s" PDF "%s"' % (HERE / "build_dictionary.py", path),
+        "   NOTE: Replace PDF with the path of the PDF file.",
+        "3. Use the skill again.",
+    ])
+
+
+def load_dictionary(path):
+    """Return the dictionary in the file. Raise DictionaryError if it is missing or not correct.
+
+    The dictionary check must never stop with a Python error, because Claude Code then
+    drops the skill. Thus each error of the file or of its folder is a DictionaryError.
+    """
+    try:
+        if not path.exists():
+            error = dictionary_error(path, missing=True)
+        else:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            dictionary = Dictionary(data)
+            if data["approved"] and data["not_approved"]:
+                return dictionary
+            error = dictionary_error(path, missing=False)
+    except Exception:
+        error = dictionary_error(path, missing=False)
+    raise DictionaryError(error)
+
+
+def status(data):
+    try:
+        dictionary = load_dictionary(data / DICTIONARY_FILE)
+    except DictionaryError as e:
+        return str(e)
+    return "OK: The ASD-STE100 dictionary is installed. Source: %s. Data folder: %s" % (
+        dictionary.source, data)
 
 
 class ProjectWords:
@@ -609,18 +678,28 @@ def read_file(path):
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Check a text against ASD-STE100.")
     parser.add_argument("files", nargs="*", help="Markdown or text files")
-    parser.add_argument("--dictionary", default=str(DEFAULT_DICTIONARY))
+    parser.add_argument("--data", default="", metavar="FOLDER",
+                        help="data folder of the plugin (default: %s)" % default_data_folder())
+    parser.add_argument("--status", action="store_true",
+                        help="do only the dictionary check; the exit code is always 0")
+    parser.add_argument("--dictionary", metavar="FILE",
+                        help="dictionary file (default: FOLDER/%s)" % DICTIONARY_FILE)
     parser.add_argument("--words", help="project word list (default: %s)" % DEFAULT_WORDS)
     parser.add_argument("--lookup", nargs="+", metavar="WORD",
                         help="show the status, meaning, and alternatives of words")
     args = parser.parse_args(argv)
+    data = Path(args.data) if args.data else default_data_folder()
+    if args.status:
+        print(status(data))
+        return 0
     if not args.files and not args.lookup:
         parser.error("give one or more files, or --lookup WORD")
-    dictionary_path = Path(args.dictionary)
-    if not dictionary_path.exists():
-        print("No dictionary data at %s. Build it with build_dictionary.py." % dictionary_path)
+    try:
+        dictionary = load_dictionary(Path(args.dictionary) if args.dictionary
+                                     else data / DICTIONARY_FILE)
+    except DictionaryError as e:
+        print(e)
         return 2
-    dictionary = Dictionary(json.loads(dictionary_path.read_text(encoding="utf-8")))
     words_path = Path(args.words) if args.words else DEFAULT_WORDS
     if args.words and not words_path.exists():
         print("No project word list at %s." % words_path)

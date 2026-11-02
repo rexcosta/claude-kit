@@ -1,12 +1,19 @@
 import ast
+import contextlib
+import io
 import json
+import os
+import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
+import build_dictionary
+import ste_check
 from build_dictionary import parse_dictionary_text
 
 HERE = Path(__file__).resolve().parent
-DATA = Path.home() / ".claude" / "plugins" / "data" / "writing-ste-claude-kit" / "ste100-dictionary.json"
+DATA = build_dictionary.default_data_folder() / build_dictionary.DICTIONARY_FILE
 
 # Offsets of the four dictionary columns from the left margin of a page:
 # word, meaning or alternatives, STE example, non-STE example.
@@ -307,6 +314,75 @@ class ParseDictionaryTest(unittest.TestCase):
             (1, 500, "zappiness (n) ZAPNESS (n) THE ZAPNESS OF")))
         self.assertEqual(data["approved"], [])
         self.assertEqual(data["not_approved"], [])
+
+
+class MainTest(unittest.TestCase):
+    def test_output_goes_to_the_data_folder_when_the_command_gives_no_output_path(self):
+        with tempfile.TemporaryDirectory() as tmp, \
+                mock.patch.dict(os.environ, {"CLAUDE_PLUGIN_DATA": tmp}):
+            lines = Path(tmp) / "lines.txt"
+            lines.write_text(page(149, "2-1-X1", (1, 643, "zorbel (v) FLIM (v) THE ZORBEL IS"),
+                                  (1, 600, "FLIM (v)"), (2, 600, "To turn a dial")),
+                             encoding="utf-8")
+            with contextlib.redirect_stdout(io.StringIO()):
+                code = build_dictionary.main([str(lines)])
+            data = json.loads((Path(tmp) / "ste100-dictionary.json").read_text(encoding="utf-8"))
+        self.assertEqual(code, 0)
+        self.assertEqual([e["word"] for e in data["not_approved"]], ["zorbel"])
+        self.assertEqual([e["word"] for e in data["approved"]], ["flim"])
+
+    def build_into(self, source):
+        """Do main() with this source and a previous dictionary file.
+
+        Give the code, the file text, and the output.
+        """
+        with tempfile.TemporaryDirectory() as tmp, \
+                mock.patch.dict(os.environ, {"CLAUDE_PLUGIN_DATA": tmp}):
+            output = Path(tmp) / "ste100-dictionary.json"
+            output.write_text("previous", encoding="utf-8")
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                code = build_dictionary.main([source(Path(tmp))])
+            return code, output.read_text(encoding="utf-8"), out.getvalue()
+
+    def build_from_pdf(self, osascript=None):
+        """Do main() with a PDF file. osascript: the text of the osascript command, or None for no command."""
+        def pdf(tmp):
+            commands = tmp / "bin"
+            commands.mkdir()
+            if osascript is not None:
+                (commands / "osascript").write_text(osascript, encoding="utf-8")
+                (commands / "osascript").chmod(0o755)
+            os.environ["PATH"] = str(commands)
+            (tmp / "ste.pdf").write_bytes(b"%PDF-1.4\n")
+            return str(tmp / "ste.pdf")
+        with mock.patch.dict(os.environ):
+            return self.build_into(pdf)
+
+    def test_build_with_a_missing_pdf_keeps_the_dictionary_file(self):
+        self.assertEqual(self.build_into(lambda tmp: str(tmp / "missing.pdf"))[:2],
+                         (2, "previous"))
+
+    def test_build_that_finds_no_entries_keeps_the_dictionary_file(self):
+        def outside(tmp):
+            lines = tmp / "lines.txt"
+            lines.write_text(page(131, "2-0-3", (1, 600, "ZAP (n) A help")), encoding="utf-8")
+            return str(lines)
+        self.assertEqual(self.build_into(outside)[:2], (2, "previous"))
+
+    def test_build_from_a_pdf_without_osascript_tells_that_it_needs_macos(self):
+        code, previous, out = self.build_from_pdf(osascript=None)
+        self.assertEqual((code, previous), (2, "previous"))
+        self.assertIn("macOS", out)
+
+    def test_build_from_a_pdf_that_osascript_cannot_read_shows_the_error_of_osascript(self):
+        code, previous, out = self.build_from_pdf(
+            osascript="#!/bin/sh\necho 'frob: the PDF file is locked' >&2\nexit 1\n")
+        self.assertEqual((code, previous), (2, "previous"))
+        self.assertIn("frob: the PDF file is locked", out)
+
+    def test_the_two_scripts_use_the_same_default_data_folder(self):
+        self.assertEqual(build_dictionary.default_data_folder(), ste_check.default_data_folder())
 
 
 @unittest.skipUnless(DATA.exists(), "no dictionary data file")

@@ -1,11 +1,13 @@
 import contextlib
 import io
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
-from ste_check import Dictionary, ProjectWords, check_text, main
+from ste_check import Dictionary, ProjectWords, check_text, default_data_folder, main
 
 
 def approved(word, pos, forms=(), meaning="", restricted=False,
@@ -87,6 +89,112 @@ def errors(findings):
 
 def reviews(findings):
     return [f for f in findings if f.level == "REVIEW"]
+
+
+SCRIPTS = Path(__file__).resolve().parent
+
+
+def run(*argv):
+    """Do main() with these parameters. Give the exit code and the output."""
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        code = main(list(argv))
+    return code, out.getvalue()
+
+
+class DataFolderTest(unittest.TestCase):
+    def test_default_data_folder_is_the_folder_of_the_marketplace_install(self):
+        with mock.patch.dict(os.environ):
+            os.environ.pop("CLAUDE_PLUGIN_DATA", None)
+            self.assertEqual(default_data_folder(), Path.home() / ".claude" / "plugins"
+                             / "data" / "writing-ste-claude-kit")
+
+    def test_environment_variable_gives_the_data_folder(self):
+        with mock.patch.dict(os.environ, {"CLAUDE_PLUGIN_DATA": "/frob/data"}):
+            self.assertEqual(default_data_folder(), Path("/frob/data"))
+
+
+class StatusTest(unittest.TestCase):
+    def status_of(self, content, folder="data"):
+        """Do --status with a dictionary file that has this content. None: no file."""
+        with tempfile.TemporaryDirectory() as tmp:
+            data = Path(tmp) / folder
+            data.mkdir()
+            if content is not None:
+                (data / "ste100-dictionary.json").write_text(content, encoding="utf-8")
+            code, out = run("--status", "--data", str(data))
+        return code, out, data
+
+    def assertNotCorrect(self, code, out):
+        self.assertEqual(code, 0)
+        self.assertTrue(out.startswith("ERROR: The dictionary file is not correct:"), out)
+        self.assertIn("build_dictionary.py", out)
+
+    def test_correct_dictionary_gives_ok_and_the_source(self):
+        code, out, data = self.status_of(json.dumps(dict(DATA, source="FROB Issue 1")))
+        self.assertEqual(code, 0)
+        self.assertTrue(out.startswith("OK: "), out)
+        self.assertIn("FROB Issue 1", out)
+        self.assertIn(str(data), out)
+
+    def test_missing_dictionary_gives_the_link_and_the_command(self):
+        code, out, data = self.status_of(None)
+        self.assertEqual(code, 0)
+        self.assertTrue(out.startswith("ERROR: The ASD-STE100 dictionary is not installed."), out)
+        self.assertIn("https://www.asd-ste100.org", out)
+        self.assertIn('python3 -I "%s" PDF "%s"' % (SCRIPTS / "build_dictionary.py",
+                                                  data / "ste100-dictionary.json"), out)
+
+    def test_dictionary_that_is_not_json_is_not_correct(self):
+        self.assertNotCorrect(*self.status_of("{frob")[:2])
+
+    def test_empty_dictionary_file_is_not_correct(self):
+        self.assertNotCorrect(*self.status_of("")[:2])
+
+    def test_dictionary_with_a_different_structure_is_not_correct(self):
+        for content in ('[]', '{"approved": []}',
+                        '{"approved": [{"pos": "n"}], "not_approved": []}'):
+            with self.subTest(content=content):
+                self.assertNotCorrect(*self.status_of(content)[:2])
+
+    def test_dictionary_without_entries_is_not_correct(self):
+        self.assertNotCorrect(*self.status_of('{"approved": [], "not_approved": []}')[:2])
+
+    def test_dictionary_with_an_empty_word_is_not_correct(self):
+        content = json.dumps({"approved": [approved("", "v")],
+                              "not_approved": [not_approved("flarn", "v", ["ZORP (v)"])]})
+        self.assertNotCorrect(*self.status_of(content)[:2])
+
+    @unittest.skipIf(os.geteuid() == 0, "root can read a folder without permissions")
+    def test_data_folder_without_read_permission_is_not_correct(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            data = Path(tmp) / "data"
+            data.mkdir()
+            data.chmod(0)
+            try:
+                code, out = run("--status", "--data", str(data))
+            finally:
+                data.chmod(0o700)
+        self.assertNotCorrect(code, out)
+
+    def test_build_command_puts_quotation_marks_around_the_paths(self):
+        _, out, data = self.status_of(None, folder="my data")
+        self.assertIn('"%s"' % (data / "ste100-dictionary.json"), out)
+
+    def test_empty_data_parameter_uses_the_default_data_folder(self):
+        with tempfile.TemporaryDirectory() as tmp, \
+                mock.patch.dict(os.environ, {"CLAUDE_PLUGIN_DATA": tmp}):
+            code, out = run("--status", "--data", "")
+        self.assertEqual(code, 0)
+        self.assertIn(str(Path(tmp) / "ste100-dictionary.json"), out)
+
+    def test_check_without_the_dictionary_shows_the_error_and_exits_with_2(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            text = Path(tmp) / "text.md"
+            text.write_text("Remove the cap.\n", encoding="utf-8")
+            code, out = run("--data", tmp, str(text))
+        self.assertEqual(code, 2)
+        self.assertTrue(out.startswith("ERROR: The ASD-STE100 dictionary is not installed."), out)
 
 
 class WordTest(unittest.TestCase):

@@ -6,11 +6,13 @@ Usage:
 A PDF is read with macOS PDFKit through pdf_lines.js, which gives each line of
 text with its position. The dictionary is a table with four columns (word,
 meaning or alternatives, STE example, non-STE example), and the positions show
-the column of each line. The output goes to ../data/ste100-dictionary.json by
-default. The dictionary is ASD copyright: keep the output on this computer and
-do not publish it.
+the column of each line. Without output.json, the output goes to
+ste100-dictionary.json in the data folder of the plugin: $CLAUDE_PLUGIN_DATA,
+or ~/.claude/plugins/data/writing-ste-claude-kit. The dictionary is ASD
+copyright: keep the output on this computer and do not publish it.
 """
 import json
+import os
 import re
 import subprocess
 import sys
@@ -18,7 +20,8 @@ import tempfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-DEFAULT_OUTPUT = HERE.parent / "data" / "ste100-dictionary.json"
+PLUGIN_ID = "writing-ste-claude-kit"
+DICTIONARY_FILE = "ste100-dictionary.json"
 NOTICE = ("Extracted from the ASD-STE100 PDF for local checks only. "
           "Copyright ASD. Do not publish or share this file.")
 
@@ -292,16 +295,35 @@ def pdf_lines(pdf):
         return out.read_text(encoding="utf-8")
 
 
+def default_data_folder():
+    """Return the data folder of the plugin, which stays after each update."""
+    if os.environ.get("CLAUDE_PLUGIN_DATA"):
+        return Path(os.environ["CLAUDE_PLUGIN_DATA"])
+    return Path.home() / ".claude" / "plugins" / "data" / PLUGIN_ID
+
+
 def main(argv=None):
     args = sys.argv[1:] if argv is None else argv
     if len(args) not in (1, 2):
         print(__doc__)
         return 2
     source = Path(args[0])
-    output = Path(args[1]) if len(args) == 2 else DEFAULT_OUTPUT
-    text = pdf_lines(source) if source.suffix.lower() == ".pdf" else source.read_text(encoding="utf-8")
+    output = Path(args[1]) if len(args) == 2 else default_data_folder() / DICTIONARY_FILE
+    if not source.is_file():
+        print("No file at %s. Give the path of the ASD-STE100 PDF file." % source)
+        return 2
+    try:
+        text = (pdf_lines(source) if source.suffix.lower() == ".pdf"
+                else source.read_text(encoding="utf-8"))
+    except PdfError as e:
+        print("%s\nThe dictionary file did not change." % e)
+        return 2
     title = TITLE_RE.search(text)
     data = parse_dictionary_text(text)
+    if not data["approved"] or not data["not_approved"]:
+        # A PDF that is not the dictionary gives no entries. Keep the previous file.
+        print("No dictionary entries in %s. The dictionary file did not change." % source)
+        return 2
     result = {
         "source": "ASD-STE100 Issue %s, %s" % title.groups() if title else "ASD-STE100",
         "notice": NOTICE,

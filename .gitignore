@@ -10,3 +10,9 @@
 **/.claude-plugin/types/
 **/.mcpb-cache/
 *.log
+
+# The ASD-STE100 dictionary. ASD has the copyright.
+ste100-dictionary.json
+
+# Python bytecode
+__pycache__/

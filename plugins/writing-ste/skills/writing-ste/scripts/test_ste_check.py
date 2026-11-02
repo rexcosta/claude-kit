@@ -436,11 +436,13 @@ class MainTest(unittest.TestCase):
             tmp = Path(tmp)
             (tmp / "dictionary.json").write_text(json.dumps(DATA), encoding="utf-8")
             (tmp / "words.md").write_text(WORDS, encoding="utf-8")
+            (tmp / "general.md").write_text("", encoding="utf-8")
             (tmp / "text.md").write_text(text, encoding="utf-8")
             out = io.StringIO()
             with contextlib.redirect_stdout(out):
                 code = main(["--dictionary", str(tmp / "dictionary.json"),
-                             "--words", str(tmp / "words.md")]
+                             "--words", str(tmp / "words.md"),
+                             "--general-words", str(tmp / "general.md")]
                             + (list(options) or [str(tmp / "text.md")]))
         return code, out.getvalue()
 
@@ -453,6 +455,26 @@ class MainTest(unittest.TestCase):
         self.assertIn("TN", lines[2])
         self.assertIn("not in", lines[3])
 
+    def test_lookup_finds_a_phrase_of_a_word_list_and_of_the_dictionary(self):
+        code, out = self.run_main("", "--lookup", "time off", "Comes on")
+        self.assertEqual(code, 0)
+        time_off, comes_on = out.splitlines()
+        self.assertIn("time off (TN, category 9) is in a word list.", time_off)
+        self.assertIn("COME ON (v) is approved", comes_on)
+
+    def test_lookup_of_a_hyphenated_word_gives_each_part(self):
+        _, out = self.run_main("", "--lookup", "read-only", "read-flarn")
+        accepted, rejected = out.splitlines()
+        self.assertNotIn("not in the dictionary", accepted)
+        self.assertIn("ONLY (adv) is approved", accepted)
+        self.assertIn('"read-flarn" is not in the dictionary', rejected)
+        self.assertIn("ZORP (v)", rejected)
+
+    def test_lookup_of_a_number_word_tells_that_it_is_a_technical_noun(self):
+        _, out = self.run_main("", "--lookup", "two")
+        self.assertIn("technical noun", out)
+        self.assertNotIn("not in the dictionary", out)
+
     def test_exit_code_is_0_when_there_are_no_errors(self):
         code, _ = self.run_main("Remove the cap.\n")
         self.assertEqual(code, 0)
@@ -461,6 +483,66 @@ class MainTest(unittest.TestCase):
         code, out = self.run_main("Remove the cap.\n\nFrobnicate it.\n")
         self.assertEqual(code, 1)
         self.assertIn("text.md:3:", out)
+
+
+
+HEADER = "| Word | Type | Category | Forms | Information |\n|---|---|---|---|---|\n"
+
+
+class WordListsTest(unittest.TestCase):
+    def run_lists(self, text, general, user, *options):
+        """Do the checker with a general word list and a word list of the user. None: no file."""
+        def write(path, content):
+            if isinstance(content, bytes):
+                path.write_bytes(content)
+            else:
+                path.write_text(content, encoding="utf-8")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            (tmp / "ste100-dictionary.json").write_text(json.dumps(DATA), encoding="utf-8")
+            write(tmp / "general.md", general)
+            if user is not None:
+                write(tmp / "ste-word-list.md", user)
+            (tmp / "text.md").write_text(text, encoding="utf-8")
+            return run("--data", str(tmp), "--general-words", str(tmp / "general.md"),
+                       *(list(options) or [str(tmp / "text.md")]))
+
+    def test_words_of_the_two_lists_are_permitted(self):
+        code, out = self.run_lists("Remove the Slack token.\n", HEADER + "| Slack | TN | 11 | | |\n",
+                                   HEADER + "| token | TN | 19 | | |\n")
+        self.assertEqual(code, 0, out)
+
+    def test_without_a_word_list_of_the_user_the_checker_uses_the_general_list(self):
+        code, out = self.run_lists("Remove the Slack token.\n",
+                                   HEADER + "| Slack | TN | 11 | | |\n", None)
+        self.assertEqual(code, 1)
+        self.assertIn('"token" is not in the dictionary or the word lists.', out)
+
+    def test_word_list_of_the_user_without_a_table_is_permitted(self):
+        for user in ("", "# STE Word List of the User\n\nNo words.\n"):
+            with self.subTest(user=user):
+                code, out = self.run_lists("Remove the Slack cap.\n",
+                                           HEADER + "| Slack | TN | 11 | | |\n", user)
+                self.assertEqual(code, 0, out)
+
+    def test_findings_of_each_list_give_the_file_of_the_list(self):
+        code, out = self.run_lists("Remove the cap.\n", HEADER + "| valve | TN | 1 | | |\n",
+                                   HEADER + "| trel | TN | 19 | | |\n")
+        self.assertEqual(code, 1)
+        self.assertIn("general.md:3: ERROR", out)
+        self.assertIn("ste-word-list.md:3: REVIEW", out)
+
+    def test_word_in_the_two_lists_is_permitted(self):
+        row = "| token | TN | 19 | | |\n"
+        code, out = self.run_lists("Remove the token.\n", HEADER + row, HEADER + row)
+        self.assertEqual(code, 0, out)
+
+    def test_lookup_finds_a_word_of_the_word_list_of_the_user(self):
+        code, out = self.run_lists("", HEADER, HEADER + "| token | TN | 19 | | |\n",
+                                   "--lookup", "token")
+        self.assertEqual(code, 0)
+        self.assertIn("token (TN, category 19) is in a word list.", out)
 
 
 if __name__ == "__main__":

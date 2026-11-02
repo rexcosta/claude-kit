@@ -12,9 +12,10 @@ check: the output starts with OK or ERROR, and the exit code is always 0.
 
 The checker reads Markdown or plain text. It does not check front matter, code
 blocks, inline code, URLs, or text in quotation marks (rule 8.6: quoted text
-counts as one word). The project word list (default: docs/ste-word-list.md in
-the current folder) gives the technical nouns (TN) and technical verbs (TV)
-that the project permits.
+counts as one word). The checker reads two word lists of technical nouns (TN)
+and technical verbs (TV): the general word list of the plugin
+(data/ste-word-list.md) and the word list of the user (ste-word-list.md in the
+data folder). All projects use the same two word lists.
 
 Each finding is an ERROR (the text does not obey a rule) or a REVIEW item (a
 person must examine the word: its part of speech or its meaning). The exit code
@@ -33,8 +34,8 @@ HERE = Path(__file__).resolve().parent
 PLUGIN_ID = "writing-ste-claude-kit"
 DICTIONARY_FILE = "ste100-dictionary.json"
 WORDS_FILE = "ste-word-list.md"
+GENERAL_WORDS = HERE.parent / "data" / WORDS_FILE
 ASD_URL = "https://www.asd-ste100.org"
-DEFAULT_WORDS = Path("docs") / "ste-word-list.md"
 
 INSTRUCTION_LIMIT = 20  # rule 5.1
 DESCRIPTION_LIMIT = 25  # rule 6.3
@@ -447,10 +448,10 @@ NUMBER_WORDS = set(
     "zero one two three four five six seven eight nine ten eleven twelve thirteen"
     " fourteen fifteen sixteen seventeen eighteen nineteen twenty thirty forty fifty"
     " sixty seventy eighty ninety hundred thousand million".split())
-UNKNOWN = "not in the dictionary or the project word list."
-UNKNOWN_HELP = ("For a word that is not in the dictionary or the project word list, use an"
-                " approved word. If it is a technical noun or verb, add it to the project"
-                " word list with its category.")
+UNKNOWN = "not in the dictionary or the word lists."
+UNKNOWN_HELP = ("For a word that is not in the dictionary or the word lists, use an approved"
+                " word. If it is a technical noun or verb, add it to the word list of the user"
+                " with its category.")
 
 
 def is_ing_form(word, verbs):
@@ -499,9 +500,9 @@ def describe(key, dictionary, words):
     """Tell the status of a word, as the checker examines it."""
     parts = []
     if words.knows(key):
-        e = words.single[key][0]
-        parts.append("%s (%s, category %s) is in the project word list." % (
-            e["word"], e["type"], e["category"]))
+        # A word can have more than one row, one for each meaning.
+        rows = {(e["word"], e["type"], e["category"]): None for e in words.single[key]}
+        parts += ["%s (%s, category %s) is in a word list." % row for row in rows]
     if dictionary.is_approved(key):
         for e in {id(e): e for e in dictionary.approved[key]}.values():
             text = "%s (%s) is approved: %s." % (e["word"].upper(), e["pos"], e["meaning"])
@@ -684,7 +685,10 @@ def main(argv=None):
                         help="do only the dictionary check; the exit code is always 0")
     parser.add_argument("--dictionary", metavar="FILE",
                         help="dictionary file (default: FOLDER/%s)" % DICTIONARY_FILE)
-    parser.add_argument("--words", help="project word list (default: %s)" % DEFAULT_WORDS)
+    parser.add_argument("--general-words", metavar="FILE",
+                        help="general word list (default: %s)" % GENERAL_WORDS)
+    parser.add_argument("--words", metavar="FILE",
+                        help="word list of the user (default: FOLDER/%s)" % WORDS_FILE)
     parser.add_argument("--lookup", nargs="+", metavar="WORD",
                         help="show the status, meaning, and alternatives of words")
     args = parser.parse_args(argv)
@@ -700,16 +704,20 @@ def main(argv=None):
     except DictionaryError as e:
         print(e)
         return 2
-    words_path = Path(args.words) if args.words else DEFAULT_WORDS
-    if args.words and not words_path.exists():
-        print("No project word list at %s." % words_path)
-        return 2
-    words = ProjectWords.parse(words_path.read_text(encoding="utf-8") if words_path.exists() else "")
+    lists = []
+    for given, default in ((args.general_words, GENERAL_WORDS), (args.words, data / WORDS_FILE)):
+        path = Path(given) if given else default
+        if given and not path.exists():
+            print("No word list at %s." % path)
+            return 2
+        if path.exists():
+            lists.append((path, ProjectWords.parse(path.read_text(encoding="utf-8"))))
+    words = ProjectWords([e for _, part in lists for e in part.entries])
     if args.lookup:
         for word in args.lookup:
             print(lookup(word, dictionary, words))
         return 0
-    results = [(words_path, words.validate(dictionary))]
+    results = [(path, part.validate(dictionary)) for path, part in lists]
     results += [(path, check_text(Path(path).read_text(encoding="utf-8"), dictionary, words))
                 for path in args.files]
     errors = reviews = 0

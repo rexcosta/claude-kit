@@ -22,17 +22,30 @@ const MAX_SHELLS = 3
 
 // The branch, or the worktree's name when the folder is a linked worktree; null outside git.
 // Absolute paths: in a subfolder git prints --git-dir absolute and --git-common-dir relative.
-const readGit = async ($: EngineInterface) => {
-  const { exitCode, stdout } = await $.process.run([
-    'git', 'rev-parse', '--abbrev-ref', 'HEAD', '--path-format=absolute', '--git-dir', '--git-common-dir',
-    '--show-toplevel',
-  ])
+const GIT_FOLDERS = ['--path-format=absolute', '--git-dir', '--git-common-dir', '--show-toplevel']
 
-  if (exitCode !== 0) {
-    return null
+const readGit = async ($: EngineInterface) => {
+  const head = await $.process.run(['git', 'rev-parse', '--abbrev-ref', 'HEAD', ...GIT_FOLDERS])
+  let lines = head.stdout.trim().split('\n')
+
+  // Before the first commit HEAD names a branch that rev-parse cannot resolve: ask for each alone.
+  if (head.exitCode !== 0) {
+    const folders = await $.process.run(['git', 'rev-parse', ...GIT_FOLDERS])
+
+    if (folders.exitCode !== 0) {
+      return null
+    }
+
+    const ref = await $.process.run(['git', 'symbolic-ref', '--short', 'HEAD'])
+
+    if (ref.exitCode !== 0) {
+      return null
+    }
+
+    lines = [ref.stdout.trim(), ...folders.stdout.trim().split('\n')]
   }
 
-  const [branch = '', gitDir, commonDir, top = ''] = stdout.trim().split('\n')
+  const [branch = '', gitDir, commonDir, top = ''] = lines
   const label = branch === 'HEAD' ? 'detached' : branch
 
   return gitDir === commonDir ? `⎇ ${label}` : `worktree ${top.split('/').pop()} (${label})`
@@ -130,6 +143,13 @@ const refreshTranscript = async ($: EngineInterface) => {
   }
 }
 
+// A refresh that fails keeps what the band has, and never fails the hook that asked for it.
+const refresh = ($: EngineInterface) =>
+  Promise.all([refreshTranscript($), refreshInfo($)]).then(
+    () => undefined,
+    () => undefined,
+  )
+
 // Cuts a folder name past 15 characters in the middle: sdafnsadsadfsadfsadfsadfsf → sdafns...sadfsf
 const clip = (name: string) => (name.length > 15 ? `${name.slice(0, 6)}...${name.slice(-6)}` : name)
 
@@ -163,7 +183,9 @@ const isReset = (limit: Limit, at: number) => limit.resetsAt !== null && Date.pa
 const describeAgents = (count: number) => (count === 1 ? '1 agent' : `${count} agents`)
 
 const describeModel = (model: string, level: string | null, isUltracode: boolean) =>
-  [model, level && `· ${level}`, level === 'max' && '💪', isUltracode && '🤔'].filter(Boolean).join(' ')
+  [model, /fable/i.test(model) && '📖', level && `· ${level}`, level === 'max' && '💪', isUltracode && '🤔']
+    .filter(Boolean)
+    .join(' ')
 
 // What /effort answers when it changed something; another answer, or a new wording, waits for the next request.
 const EFFORT_SET = /^Set effort level to (low|medium|high|xhigh|max)\b/
@@ -175,7 +197,7 @@ export const register: Register = on => {
   let calls = 0
 
   on('session.start', async ($, e, next) => {
-    await Promise.all([refreshTranscript($), refreshInfo($)])
+    await refresh($)
     // Keeps the reset countdown moving between turns.
     ticker?.cancel()
     ticker = $.clock.every(60_000, () => void refreshInfo($).catch(() => {}))
@@ -203,7 +225,23 @@ export const register: Register = on => {
       await update($, shells, all => all.filter(one => one.agentId !== agentId))
     }
 
-    await Promise.all([refreshTranscript($), refreshInfo($)])
+    await refresh($)
+
+    return done
+  })
+
+  // /clear and /resume end the session and the process goes on under another id, with no
+  // session.start for it: the band reads the name and the context of that one.
+  on('command.run', { command: 'clear' }, async ($, e, next) => {
+    const done = await next(e)
+    await refresh($)
+
+    return done
+  })
+
+  on('command.run', { command: 'resume' }, async ($, e, next) => {
+    const done = await next(e)
+    await refresh($)
 
     return done
   })
@@ -327,11 +365,12 @@ export const register: Register = on => {
           {text}
         </Text>
       )
-    // The week has its own scale: bold red past 80%; at 100% extra usage is billed.
+    // The week has its own scale: bold red past 80%. Past 100% an account either stops or pays for
+    // extra usage, and the band cannot tell which.
     const weekUsage = (percent: number) =>
       percent >= 100 ? (
         <Text bold color="red">
-          week: limit reached and now paying
+          week: limit reached
         </Text>
       ) : percent > 80 ? (
         <Text bold color="red">

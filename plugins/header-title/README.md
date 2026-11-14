@@ -110,14 +110,22 @@ A copy of the mod can be in the `~/.claude/mods/header-title` folder. The `CLAUD
    cd claude-kit
    ```
 
-2. Make the changes in the `plugins/header-title` folder.
-3. Do a check of the mod:
+2. Start a session that loads the mod from its folder:
+
+   ```bash
+   claude --plugin-dir plugins/header-title
+   ```
+
+   NOTE: Claude Code writes the TypeScript types of its API into the `plugins/header-title/.claude-plugin/types` folder. The `tsconfig.json` file of the mod uses these types. Git does not keep this folder.
+
+3. Make the changes in the `plugins/header-title` folder.
+4. Do a check of the mod:
 
    ```bash
    claude plugin validate plugins/header-title
    ```
 
-4. Do the tests of the mod:
+5. Do the tests of the mod:
 
    ```bash
    claude plugin test plugins/header-title
@@ -125,11 +133,11 @@ A copy of the mod can be in the `~/.claude/mods/header-title` folder. The `CLAUD
 
    NOTE: The output must show `0 fail`.
 
-5. Increase the `version` in `plugins/header-title/.claude-plugin/plugin.json`.
+6. Increase the `version` in `plugins/header-title/.claude-plugin/plugin.json`.
 
    NOTE: The version tells `claude plugin update` that the mod has changes.
 
-6. Send the changes to GitHub in a new branch:
+7. Send the changes to GitHub in a new branch:
 
    ```bash
    git switch -c BRANCH-NAME
@@ -140,13 +148,13 @@ A copy of the mod can be in the `~/.claude/mods/header-title` folder. The `CLAUD
 
    NOTE: The `main` branch accepts changes only from a PR.
 
-7. Make a PR for the branch:
+8. Make a PR for the branch:
 
    ```bash
    gh pr create --fill
    ```
 
-8. If the `main` branch has new commits, put your branch on top of `main`:
+9. If the `main` branch has new commits, put your branch on top of `main`:
 
    ```bash
    git fetch origin
@@ -156,10 +164,20 @@ A copy of the mod can be in the `~/.claude/mods/header-title` folder. The `CLAUD
 
    NOTE: You can also select `Update branch` and then `Update with rebase` on the page of the PR.
 
-9. After the approval of the PR, merge the PR with a merge commit:
+10. After the approval of the PR, merge the PR with a merge commit:
 
-   ```bash
-   gh pr merge --merge
-   ```
+    ```bash
+    gh pr merge --merge
+    ```
 
-   NOTE: The rules of the repository accept only a merge commit. Then each PR shows as one merge commit in the `main` branch.
+    NOTE: The rules of the repository accept only a merge commit. Then each PR shows as one merge commit in the `main` branch.
+
+11. Give a tag to the new version:
+
+    ```bash
+    git switch main
+    git pull
+    claude plugin tag plugins/header-title --push
+    ```
+
+    NOTE: The tag shows which commit has each version of the mod.

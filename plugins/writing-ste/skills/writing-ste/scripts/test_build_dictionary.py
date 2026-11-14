@@ -167,6 +167,18 @@ class ParseDictionaryTest(unittest.TestCase):
                          "To move a drink from the cup through the throat into the belly")
         self.assertEqual(e["note"], "Use this word only for soda and juice.")
 
+    def test_help_note_keeps_its_uppercase_words_and_stops_at_the_end_of_the_sentence(self):
+        data = parse_dictionary_text(page(
+            396, "2-1-X6",
+            (1, 644, "GULPLE (v),"), (1, 632, "GULPLES,"), (1, 620, "GULPLED"),
+            (2, 643, "To move a drink"), (2, 601, "Do not use this"),
+            (2, 589, "word to mean"), (2, 577, "ZIB, ZAB,"), (2, 565, "ZOB,"),
+            (2, 553, "ZUB."), (2, 541, "Refer to the"), (2, 529, "entries from"),
+            (2, 517, "zib until"), (2, 505, "zub."),
+            margin=50))
+        self.assertEqual(self.entry(data, "approved", "gulple", "v")["note"],
+                         "Do not use this word to mean ZIB, ZAB, ZOB, ZUB.")
+
     def test_meaning_that_starts_with_the_article_a_is_kept(self):
         data = parse_dictionary_text(page(
             155, "2-1-X7",
@@ -381,6 +393,21 @@ class MainTest(unittest.TestCase):
         self.assertEqual((code, previous), (2, "previous"))
         self.assertIn("frob: the PDF file is locked", out)
 
+    def test_dictionary_file_gives_the_version_of_the_builder(self):
+        with tempfile.TemporaryDirectory() as tmp, \
+                mock.patch.dict(os.environ, {"CLAUDE_PLUGIN_DATA": tmp}):
+            lines = Path(tmp) / "lines.txt"
+            lines.write_text(page(149, "2-1-X1", (1, 643, "zorbel (v) FLIM (v) THE ZORBEL IS"),
+                                  (1, 600, "FLIM (v)"), (2, 600, "To turn a dial")),
+                             encoding="utf-8")
+            with contextlib.redirect_stdout(io.StringIO()):
+                build_dictionary.main([str(lines)])
+            data = json.loads((Path(tmp) / "ste100-dictionary.json").read_text(encoding="utf-8"))
+        self.assertEqual(data["builder"], build_dictionary.BUILDER_VERSION)
+
+    def test_the_two_scripts_use_the_same_version_of_the_builder(self):
+        self.assertEqual(build_dictionary.BUILDER_VERSION, ste_check.BUILDER_VERSION)
+
     def test_the_two_scripts_use_the_same_default_data_folder(self):
         self.assertEqual(build_dictionary.default_data_folder(), ste_check.default_data_folder())
 
@@ -417,6 +444,12 @@ class RealDictionaryTest(unittest.TestCase):
     def test_the_general_word_list_has_no_errors(self):
         words = ste_check.ProjectWords.parse(ste_check.GENERAL_WORDS.read_text(encoding="utf-8"))
         findings = words.validate(ste_check.Dictionary(self.data))
+        self.assertEqual([f.message for f in findings if f.level == "ERROR"], [])
+
+    def test_the_text_of_the_general_word_list_has_no_errors(self):
+        text = ste_check.GENERAL_WORDS.read_text(encoding="utf-8")
+        findings = ste_check.check_text(text, ste_check.Dictionary(self.data),
+                                        ste_check.ProjectWords.parse(text))
         self.assertEqual([f.message for f in findings if f.level == "ERROR"], [])
 
     def test_the_test_files_contain_no_text_of_the_dictionary(self):

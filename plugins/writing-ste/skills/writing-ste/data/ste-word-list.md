@@ -30,25 +30,25 @@ The texts in the column "Words for" are short. For the full names of the categor
 
 | Word | Type | Category | Forms | Information |
 |---|---|---|---|---|
-| AC | TN | 15 | | An acceptance criterion of a Jira story, for example "AC 3.6" |
+| AC | TN | 15 | | A condition that a Jira ticket must obey, for example "AC 3.6" |
 | accessibility | TN | 19 | | A design that lets all persons use an app, for example with a screen reader |
 | account | TN | 19 | | An account of the user in a source or in a different system |
 | active voice | TN | 15 | | |
 | afternoon | TN | 9 | | |
 | analytics | TN | 19 | | Data about how the users use an app |
-| Android | TN | 19 | | The operating system of Android phones |
+| Android | TN | 19 | | An operating system of Google for mobile devices |
 | Anthropic | TN | 11 | | The company that makes Claude |
 | API | TN | 19 | | |
 | API request | TN | 19 | | The data that a program sends to an API to get a result |
 | API scope | TN | 19 | | A permission that a token gives for an API |
 | app | TN | 19 | | A program that connects to Slack or to Google |
-| Apple Pay | TN | 19 | | The Apple payment system on the iPhone |
+| Apple Pay | TN | 19 | | A system of `Apple` that lets a person use a card on an `iPhone` |
 | artifact | TN | 19 | | A page that Claude publishes on `claude.ai` |
 | ASD | TN | 11 | | "Aerospace, Security and Defence Industries Association of Europe" |
-| assertion | TN | 19 | | A check in the source code that stops a Debug build if its condition is not true |
+| assertion | TN | 19 | | A check in the source code that stops a Debug build if its condition is `false` |
 | assignee | TN | 11 | | The person who must do a Jira task |
 | Atlassian | TN | 11 | | The company that makes Jira |
-| atom | TN | 19 | | A named value in `$.state` of a Claude Code mod |
+| atom | TN | 19 | | A value with a name in `$.state` of a Claude Code mod |
 | attachment | TN | 19 | | A file in an email |
 | attendee | TN | 11 | | A person in a calendar event |
 | authentication | TN | 19 | | |
@@ -62,7 +62,7 @@ The texts in the column "Words for" are short. For the full names of the categor
 | body | TN | 19 | | The text of an email |
 | boolean | TN | 19 | | A data type with the value `true` or `false` |
 | bot | TN | 19 | | A program that writes messages in Slack |
-| box | TN | 19 | | The square control of a checkbox that the user checks |
+| box | TN | 19 | | The control of a checkbox that the user checks |
 | branch | TN | 19 | | A git branch |
 | browser | TN | 19 | | A program that shows web pages |
 | build | TV | 2c | | To make an app or a library from its source code |
@@ -70,11 +70,13 @@ The texts in the column "Words for" are short. For the full names of the categor
 | button | TN | 19 | | A control of a UI that the user clicks |
 | cache | TN | 19 | | |
 | calendar | TN | 19 | | The calendar system of the user, or one calendar in it |
+| card | TN | 19 | | A bank card of a person |
 | category | TN | 15 | | A category of rule 1.5 or rule 1.12 |
 | category | TN | 19 | | An email category of a provider, or a status category of Jira |
 | caution | TN | 15 | | A CAUTION in a text |
 | channel | TN | 19 | | A Slack channel |
 | character | TN | 19 | | |
+| chat | TN | 19 | | The conversation between the user and the model |
 | chat answer | TN | 19 | | The text that the model writes in the chat after a message from the user |
 | chat history | TN | 19 | | The messages of one chat |
 | check | TV | 2b | | To put a check mark in a checkbox |
@@ -85,6 +87,7 @@ The texts in the column "Words for" are short. For the full names of the categor
 | CI | TN | 19 | | A system that builds the code and does the tests after each change |
 | Claude | TN | 19 | | |
 | Claude Code | TN | 19 | | |
+| client | TN | 19 | | A program that sends requests to a server |
 | closure | TN | 19 | | A Swift function that a type keeps as a value |
 | column | TN | 15 | | |
 | command | TN | 19 | | A text that you give to a program in a terminal |
@@ -125,7 +128,7 @@ The texts in the column "Words for" are short. For the full names of the categor
 | dictionary | TN | 15 | | Part 2 of ASD-STE100 |
 | direct message | TN | 19 | | A Slack message between two persons (DM) |
 | disable | TV | 2b | | To make a control of a UI not available |
-| disclaimer | TN | 19 | | A box of text in the UI that gives a warning or a legal note |
+| disclaimer | TN | 19 | | A box of text in the UI that gives a warning |
 | Discord | TN | 19 | | A message and video call system for groups of persons |
 | divider | TN | 19 | | A line between two groups of a list |
 | DM | TN | 19 | | A direct message in Slack |
@@ -135,7 +138,7 @@ The texts in the column "Words for" are short. For the full names of the categor
 | dp | TN | 9 | | A unit of length of the Android user interface |
 | draft | TN | 19 | | A GitHub PR that is not complete |
 | due date | TN | 19 | | The date when a Jira task must be done |
-| effort level | TN | 19 | | The setting of a Claude model that controls the quantity of thought: low, medium, high, xhigh, or max |
+| effort level | TN | 19 | | The setting of a Claude model that controls the quantity of thought: `low`, `medium`, `high`, `xhigh`, or `max` |
 | element | TN | 19 | | A part of a UI that a mod shows, for example `Box`, `Text`, or `Button` |
 | email | TN | 19 | | |
 | email address | TN | 19 | | |
@@ -149,11 +152,12 @@ The texts in the column "Words for" are short. For the full names of the categor
 | event | TN | 19 | | An item in a calendar, for example a meeting |
 | exit code | TN | 19 | | The number that a program gives when it stops. The number 0 shows that the program operated correctly. |
 | expiry date | TN | 9 | | The last month in which a person can use a card |
-| explainer | TN | 19 | | A sheet that tells the user what a label means |
+| explainer | TN | 19 | | A sheet that gives the meaning of a label to the user |
 | export file | TN | 19 | | A file that a source makes with a copy of its data |
 | failed state | TN | 19 | | The state of a UI component after an operation that gave no result |
 | fallback | TN | 19 | | A different model that the Claude API uses after a refusal |
 | field | TN | 19 | | |
+| Figma | TN | 19 | | A system for the design of user interfaces |
 | file | TN | 19 | | |
 | first | TN | 9 | | A number that shows a position in a sequence, for example the first day |
 | fixture | TN | 19 | | Test data in a file |
@@ -183,7 +187,7 @@ The texts in the column "Words for" are short. For the full names of the categor
 | HTML | TN | 19 | | |
 | HTTP | TN | 19 | | |
 | IANA | TN | 11 | | The group that gives the names of the time zones |
-| icon | TN | 19 | | A small image in the UI |
+| icon | TN | 19 | | A small symbol in the UI |
 | ID | TN | 19 | | |
 | imperative form | TN | 15 | | The form of a verb in an instruction |
 | import | TN | 19 | | The part of a Python file that loads a module, for example `import os` |
@@ -193,8 +197,8 @@ The texts in the column "Words for" are short. For the full names of the categor
 | instance | TN | 19 | | One date and time of a recurring event |
 | integer | TN | 19 | | A data type for a number with no decimal part |
 | invitation | TN | 19 | | An invitation to a calendar event |
-| iOS | TN | 19 | | The operating system of the iPhone |
-| iPad | TN | 19 | | The Apple tablet |
+| iOS | TN | 19 | | The operating system of the `iPhone` |
+| iPad | TN | 19 | | A device of `Apple` with a large screen |
 | ISO | TN | 15 | | ISO 8601, the standard for dates and times |
 | issue | TN | 15 | | An issue of a standard, for example issue 9 |
 | issue type | TN | 19 | | The type of a Jira task, for example `Bug` |
@@ -252,9 +256,9 @@ The texts in the column "Words for" are short. For the full names of the categor
 | Monday | TN | 9 | | |
 | month | TN | 9 | | |
 | morning | TN | 9 | | |
-| ms | TN | 9 | | Millisecond |
+| ms | TN | 9 | | A unit of time: 0.001 second |
 | multi-word noun | TN | 15 | | |
-| network | TN | 19 | | A group of computers that connect to each other, and the internet |
+| network | TN | 19 | | A group of computers that connect to each other |
 | newsletter | TN | 19 | | |
 | note | TN | 15 | | A NOTE in a text |
 | notification | TN | 19 | | |
@@ -262,6 +266,7 @@ The texts in the column "Words for" are short. For the full names of the categor
 | npm | TN | 19 | | The package manager of `Node.js` |
 | null | TN | 19 | | A value that shows that a column is empty |
 | OAuth | TN | 19 | | |
+| operating system | TN | 19 | | |
 | organization | TN | 11 | | A GitHub organization |
 | organizer | TN | 11 | | The person who made a calendar event |
 | Outlook | TN | 19 | | |
@@ -276,22 +281,23 @@ The texts in the column "Words for" are short. For the full names of the categor
 | PDF | TN | 19 | | |
 | permission | TN | 19 | | |
 | personal data | TN | 21 | | Data about a person |
-| phase | TN | 15 | | A part of the implementation checklist of a specification |
+| phase | TN | 15 | | A part of the list of tasks of a specification |
 | pin | TN | 19 | | A mark that keeps an item at the top of a list |
 | pin | TV | 2b | | To keep an item at the top of a list |
 | pipeline | TN | 19 | | A sequence of CI steps |
 | PK | TN | 19 | | Primary key |
 | plain text | TN | 19 | | Text without HTML or a different format |
 | plan | TN | 15 | | A text that gives the steps of a work |
-| plugin | TN | 19 | | A package that adds skills, mods, or commands to Claude Code |
-| PM | TN | 11 | | The product manager |
-| poll | TN | 19 | | A series of the same API request until the result changes |
+| plugin | TN | 19 | | A group of files that adds skills, mods, or commands to Claude Code |
+| PM | TN | 11 | | The person who makes the decisions about the functions of a system |
+| poll | TN | 19 | | A sequence of the same API request until the result changes |
 | poll | TV | 2c | | To send the same API request again until the result changes |
 | PR | TN | 19 | | A `pull request` on GitHub |
 | preview | TN | 19 | | The first part of the text of an email |
 | primary key | TN | 19 | | |
 | priority | TN | 19 | | The priority of a Jira task |
 | privacy | TN | 21 | | |
+| process | TN | 19 | | A program that operates in the operating system |
 | product owner | TN | 11 | | |
 | production | TN | 19 | | The servers that the users use |
 | program | TN | 19 | | |
@@ -327,6 +333,7 @@ The texts in the column "Words for" are short. For the full names of the categor
 | regression | TN | 19 | | An error in a function that operated correctly before a change |
 | reporter | TN | 11 | | The person who wrote a Jira task |
 | repository | TN | 19 | | |
+| request | TN | 19 | | A message from a client to a server |
 | response | TN | 19 | | The response of an attendee to an invitation |
 | REST | TN | 19 | | |
 | review | TN | 19 | | The result of the inspection of a GitHub PR by a reviewer |
@@ -336,10 +343,10 @@ The texts in the column "Words for" are short. For the full names of the categor
 | roll back | TV | 2c | | To stop a transaction and erase its changes |
 | rule | TN | 15 | | A rule of ASD-STE100 |
 | Rust | TN | 19 | | A programming language |
-| safe area | TN | 19 | | The part of the screen that the system UI does not cover |
+| safe area | TN | 19 | | The part of the screen where the system UI does not show |
 | Saturday | TN | 9 | | |
 | save | TV | 2a | | To keep data in a storage or in an account of a system |
-| scaffold | TN | 19 | | A shared SwiftUI layout for screens that have the same structure |
+| scaffold | TN | 19 | | A SwiftUI layout that many screens with the same structure use |
 | schema | TN | 19 | | |
 | screen | TN | 19 | | |
 | screen reader | TN | 19 | | A program that speaks the text on the screen |
@@ -370,7 +377,7 @@ The texts in the column "Words for" are short. For the full names of the categor
 | sort | TV | 2b | | |
 | spacer | TN | 19 | | An empty UI component that keeps a distance between two components |
 | specification | TN | 15 | | |
-| SPI | TN | 19 | | A Swift interface that a library marks with `@_spi` and does not make public |
+| SPI | TN | 19 | | A Swift interface that a library marks with `@_spi`. Only some modules can use it. |
 | spinner | TN | 19 | | A UI part that turns while a process continues |
 | sprint | TN | 19 | | A Jira sprint |
 | SQL | TN | 19 | | A programming language for database queries |
@@ -378,14 +385,14 @@ The texts in the column "Words for" are short. For the full names of the categor
 | stack | TN | 19 | | A sequence of git branches where each branch starts on the branch below it |
 | staging | TN | 19 | | The servers where a team tests a version before the users get it |
 | standard | TN | 15 | | ASD-STE100, issue 9 |
-| state | TN | 19 | | A named condition of a UI component or of a server operation |
+| state | TN | 19 | | A condition with a name of a UI component or of a server operation |
 | static type | TN | 19 | | |
 | status | TN | 19 | | |
 | STE | TN | 15 | | Simplified Technical English |
 | storage | TN | 19 | | |
 | stream | TV | 2c | | To show the output of the model while the model writes it |
 | structured output | TN | 19 | | A function of the Claude API that gives JSON output that agrees with a schema |
-| stub | TN | 19 | | A test function that gives fixed data in place of a real function |
+| stub | TN | 19 | | A function that gives test data. A test uses it as an alternative to a function of the app. |
 | subagent | TN | 19 | | An agent that a Claude Code session starts for one task |
 | subject | TN | 15 | | The subject of a paragraph |
 | subject | TN | 19 | | The subject of an email |
@@ -393,11 +400,12 @@ The texts in the column "Words for" are short. For the full names of the categor
 | summary | TN | 19 | | The summary of a Jira task |
 | summer time | TN | 9 | | |
 | Sunday | TN | 9 | | |
-| SwiftUI | TN | 19 | | The UI framework of Apple |
+| Swift | TN | 19 | | A programming language for iOS apps |
+| SwiftUI | TN | 19 | | The UI library of `Apple` |
 | system prompt | TN | 19 | | |
 | table | TN | 15 | | |
 | tag | TN | 19 | | A git tag |
-| tap | TN | 19 | | One touch of a finger on the screen |
+| tap | TN | 19 | | One touch on the screen |
 | team | TN | 11 | | |
 | team member | TN | 11 | | |
 | tech lead | TN | 11 | | |
@@ -435,9 +443,9 @@ The texts in the column "Words for" are short. For the full names of the categor
 | unit test | TN | 19 | | A test of one function or one type |
 | untrusted text | TN | 19 | | Text from a source that other persons wrote |
 | unzip | TV | 2c | | To put the files of a zip file into a folder |
-| uppercase | TN | 19 | | The capital characters, for example A, B, and C |
+| uppercase | TN | 19 | | The characters `A` to `Z` |
 | URL | TN | 19 | | |
-| US English | TN | 15 | | The English language with the spelling of the United States |
+| US English | TN | 15 | | English as persons write it in the `United States` |
 | user | TN | 11 | | A person who uses a program |
 | UTC | TN | 9 | | |
 | vacation | TN | 9 | | |
@@ -447,7 +455,7 @@ The texts in the column "Words for" are short. For the full names of the categor
 | version | TN | 19 | | |
 | vertical list | TN | 15 | | |
 | video call | TN | 19 | | |
-| view controller | TN | 19 | | A UIKit object that shows one screen |
+| view controller | TN | 19 | | A `UIKit` object that shows one screen |
 | viewport | TN | 19 | | The area of a browser that shows a web page |
 | warning | TN | 15 | | A WARNING in a text |
 | web | TN | 19 | | |
@@ -459,7 +467,7 @@ The texts in the column "Words for" are short. For the full names of the categor
 | word | TN | 15 | | |
 | working hours | TN | 9 | | The hours when a person is at work |
 | workspace | TN | 19 | | A Slack workspace or a Google Workspace account |
-| worktree | TN | 19 | | A git worktree: one more folder of a git repository, with its own branch |
+| worktree | TN | 19 | | A git worktree: one more folder of a git repository, with a different branch |
 | YAML | TN | 19 | | A text format for data and settings |
 | year | TN | 9 | | |
 | zip file | TN | 19 | | A file that contains compressed files |

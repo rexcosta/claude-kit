@@ -5,8 +5,20 @@ const BAND = {
   plugin: 'header-title',
   component: 'AbovePrompt',
   surface: 'terminal',
-  props: { hasSurvey: false, isWorking: false },
+  // The band reads hasSurvey, isWorking and maxRows. A maxRows of 40 is more than the band takes, so it shows whole.
+  props: {
+    hasSurvey: false,
+    isCollapsed: false,
+    isWorking: false,
+    maxRows: 40,
+    bodyColumns: 120,
+    scroll: { offset: 0, bodyRows: 40 },
+    view: {},
+  },
 } as const
+
+// A slash command as the person types it at the prompt, on the main screen of an 80-column terminal.
+const TYPED = { origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 80 } } as const
 
 type Git = { exitCode: number; stdout: string }
 type RateLimit = { kind: string; percentUsed: number; resetsAt?: string }
@@ -16,7 +28,9 @@ type RateLimit = { kind: string; percentUsed: number; resetsAt?: string }
 const setup = ($: Parameters<TestBody>[0], on: Parameters<TestBody>[1], now?: number) => {
   const state = {
     cwd: '/projects/a',
-    percent: 10,
+    model: 'Opus 5.5',
+    percent: 10 as number | undefined,
+    usageDeny: undefined as string | undefined,
     rateLimits: [] as RateLimit[],
     git: (_argv: readonly string[]): Git => ({ exitCode: 128, stdout: '' }),
     transcript: '',
@@ -29,20 +43,24 @@ const setup = ($: Parameters<TestBody>[0], on: Parameters<TestBody>[1], now?: nu
   }
   mock.store(on)
 
-  if (now === undefined) {
-    mock.clock(on)
-  } else {
-    mock.clock(on, { now })
-  }
+  const clock = now === undefined ? mock.clock(on) : mock.clock(on, { now })
 
   on('session.id', () => ({ value: state.sessionId }))
   on('settings.read', () => ({ value: state.settingsUltracode ? { ultracode: true } : {} }))
   on('env.get', (_, e) => ({ value: e.name === 'HOME' ? '/home/me' : undefined }))
   on('session.cwd', () => ({ value: state.cwd }))
-  on('session.model', () => ({ value: 'Opus 5.5' }))
-  on('session.usage', () => ({
-    value: { startedAt: 0, context: { window: 200000, percent: state.percent }, rateLimits: state.rateLimits },
-  }))
+  on('session.model', () => ({ value: state.model }))
+  on('session.usage', () =>
+    state.usageDeny === undefined
+      ? {
+          value: {
+            startedAt: 0,
+            context: { window: 200000, ...(state.percent === undefined ? {} : { percent: state.percent }) },
+            rateLimits: state.rateLimits,
+          },
+        }
+      : { deny: state.usageDeny },
+  )
   on('process.run', (_, e) => {
     const isGit = e.argv[0] === 'git'
 
@@ -91,7 +109,7 @@ const setup = ($: Parameters<TestBody>[0], on: Parameters<TestBody>[1], now?: nu
 
   const modelLine = async () => {
     const ui = await $.ui.mount(BAND)
-    const found = (await ui.find({ type: 'Text', text: /Opus/ }))?.text
+    const found = (await ui.find({ type: 'Text', text: /Opus|Fable/ }))?.text
     await ui.unmount()
 
     return found
@@ -113,7 +131,7 @@ const setup = ($: Parameters<TestBody>[0], on: Parameters<TestBody>[1], now?: nu
     return found.map(one => `${one.props.color ?? 'dim'}: ${one.text}`)
   }
 
-  return { state, start, step, title, modelLine, shellLines }
+  return { state, clock, start, step, title, modelLine, shellLines }
 }
 
 type Drawn = { props?: Record<string, unknown>; children?: unknown[] }
@@ -151,13 +169,65 @@ test('/rename updates the band at once, from its args or, bare, from the transcr
   const { state, start, title } = setup($, on)
   await start()
 
-  await $.command.run({ command: 'rename', args: '  Search refactor ' })
+  await $.command.run({ command: 'rename', args: '  Search refactor ', ...TYPED })
   expect(state.renames).toEqual(['  Search refactor '])
   expect(await title()).toBe('Search refactor')
 
   state.transcript = '"customTitle":"Search refactor"\n"customTitle":"made-up-name"\n'
-  await $.command.run({ command: 'rename', args: '' })
+  await $.command.run({ command: 'rename', args: '', ...TYPED })
   expect(await title()).toBe('made-up-name')
+})
+
+test('/clear and /resume show the session the process goes on under, with no session.start for it', async ($, on) => {
+  const { state, start, title } = setup($, on)
+
+  const ctx = async () => {
+    const ui = await $.ui.mount(BAND)
+    const found = (await ui.find({ type: 'Text', text: /^ctx:/ }))?.text
+    await ui.unmount()
+
+    return found
+  }
+
+  state.transcript = '"customTitle":"Search refactor"\n'
+  await start()
+  expect(await title()).toBe('Search refactor')
+  expect(await ctx()).toBe('ctx: 10% used')
+
+  // A fresh session: no transcript yet, and no response to measure the context from.
+  state.sessionId = 'sess-2'
+  state.transcript = ''
+  state.percent = undefined
+  await $.command.run({ command: 'clear', args: '', ...TYPED })
+  expect(await title()).toBe('Unnamed session')
+  expect(await ctx()).toBe('ctx: --')
+
+  state.sessionId = 'sess-1'
+  state.transcript = '"customTitle":"Search refactor"\n'
+  state.percent = 42
+  await $.command.run({ command: 'resume', args: 'sess-1', ...TYPED })
+  expect(await title()).toBe('Search refactor')
+  expect(await ctx()).toBe('ctx: 42% used')
+})
+
+test('a refresh that fails at the start still starts the refresh of each minute', async ($, on) => {
+  const { state, clock, start } = setup($, on)
+
+  const ctx = async () => {
+    const ui = await $.ui.mount(BAND)
+    const found = (await ui.find({ type: 'Text', text: /^ctx:/ }))?.text
+    await ui.unmount()
+
+    return found
+  }
+
+  state.usageDeny = 'no usage yet'
+  await start()
+  expect(await ctx()).toBeUndefined()
+
+  state.usageDeny = undefined
+  await clock.advance(60_000)
+  expect(await ctx()).toBe('ctx: 10% used')
 })
 
 test('a failed transcript search keeps the name the band has', async ($, on) => {
@@ -234,6 +304,16 @@ test("the model adds the effort of the main loop turn's first request, and 💪 
   expect(await modelLine()).toBe('  |  Opus 5.5 · 42')
 })
 
+test('a Fable model adds 📖 after its name', async ($, on) => {
+  const { state, start, step, modelLine } = setup($, on)
+  state.model = 'Fable 5.2'
+  await start()
+  expect(await modelLine()).toBe('  |  Fable 5.2 📖')
+
+  await step('max')
+  expect(await modelLine()).toBe('  |  Fable 5.2 📖 · max 💪')
+})
+
 test('🤔 follows the ultracode rows the session writes, found by the same search as the name', async ($, on) => {
   const { state, start, step, title, modelLine } = setup($, on)
   await start()
@@ -306,7 +386,7 @@ test('/effort changes the band at once when its answer says so, until a later ro
 
   const effort = async (args: string, text: string) => {
     state.commandText = text
-    await $.command.run({ command: 'effort', args })
+    await $.command.run({ command: 'effort', args, ...TYPED })
 
     return modelLine()
   }
@@ -372,6 +452,24 @@ test('the path line adds the branch, or the worktree, and nothing outside git', 
   expect(await pathLine()).toBe('../Projects/my-app')
 })
 
+test('a repository with no commit yet shows its branch', async ($, on) => {
+  const { state, start } = setup($, on)
+  const top = '/Users/me/Documents/Projects/my-app'
+  state.cwd = top
+  // As git answers before the first commit: HEAD names a branch that rev-parse cannot resolve.
+  state.git = argv =>
+    argv.includes('--abbrev-ref')
+      ? { exitCode: 128, stdout: 'HEAD\n' }
+      : argv.includes('symbolic-ref')
+        ? { exitCode: 0, stdout: 'main\n' }
+        : { exitCode: 0, stdout: `${top}/.git\n${top}/.git\n${top}\n` }
+
+  await start()
+  const ui = await $.ui.mount(BAND)
+  expect((await ui.find({ type: 'Text', text: /^\.\.\// }))?.text).toBe('../Projects/my-app  |  ⎇ main')
+  await ui.unmount()
+})
+
 test('a subfolder of the main checkout reads as its branch, not as a worktree', async ($, on) => {
   const { state, start } = setup($, on)
   state.cwd = '/Users/me/repo/Apps'
@@ -430,7 +528,7 @@ test('the title, its hint, the path and the model cut at the edge instead of wra
     '  |  Opus 5.5: truncate-end',
   ])
 
-  await $.command.run({ command: 'rename', args: 'Login screen' })
+  await $.command.run({ command: 'rename', args: 'Login screen', ...TYPED })
   expect(await wraps()).toEqual(['Login screen: truncate-end', '/projects/a: truncate-end', '  |  Opus 5.5: truncate-end'])
 })
 
@@ -447,7 +545,7 @@ test('the 5h line reads like the context, with the time to its reset', async ($,
   await ui.unmount()
 })
 
-test('the week line goes bold red past 80% and says paying at 100%', async ($, on) => {
+test('the week line goes bold red past 80% and says limit reached at 100%', async ($, on) => {
   const { state, start } = setup($, on, Date.parse('2026-10-22T10:00:00Z'))
 
   const week = async (percentUsed: number) => {
@@ -468,8 +566,8 @@ test('the week line goes bold red past 80% and says paying at 100%', async ($, o
     [42, 'week: 42% used', false, undefined],
     [80, 'week: 80% used', false, undefined],
     [81, 'week: 81% used', true, 'red'],
-    [100, 'week: limit reached and now paying', true, 'red'],
-    [104, 'week: limit reached and now paying', true, 'red'],
+    [100, 'week: limit reached', true, 'red'],
+    [104, 'week: limit reached', true, 'red'],
   ] as const) {
     expect(await week(value)).toEqual({ text, isBold, color, reset: '  |  resets in 3d 3h' })
   }
@@ -494,7 +592,7 @@ test('a window past its reset reads as reset, not as the last response left it',
 
   expect(await windows('2026-10-25T13:00:00Z')).toEqual([
     'dim: 5h: reset',
-    'red: week: limit reached and now paying',
+    'red: week: limit reached',
     'dim:   |  resets in 3d 0h',
   ])
 
@@ -561,7 +659,7 @@ test('an unnamed session hints at /rename; a named one shows its name alone', as
 
   expect(await hint()).toBe('  run /rename <name> to set one')
 
-  await $.command.run({ command: 'rename', args: 'Login screen' })
+  await $.command.run({ command: 'rename', args: 'Login screen', ...TYPED })
   expect(await hint()).toBeUndefined()
 })
 
@@ -631,6 +729,8 @@ test('shell lines: yellow while a Bash call runs, magenta in the background unti
   await $.prompt.submit({
     text: '<task-notification>\n<task-id>b1</task-id>\n<status>completed</status>\n</task-notification>\n'
       + '<task-notification>\n<task-id>b3</task-id>\n<status>failed</status>\n</task-notification>',
+    wait: false,
+    origin: { kind: 'task-notification' },
   })
   expect(await shellLines()).toEqual(['magenta: ⚙ Wait t3  · background', 'magenta: ⚙ Wait t5  · background'])
 

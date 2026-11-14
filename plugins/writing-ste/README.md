@@ -87,9 +87,13 @@ To add a word, write `Add WORD to my STE word list` in the session.
 
    NOTE: The new version does not change the dictionary file or the word list of the user.
 
+4. Type `/writing-ste:writing-ste` in a session. If the skill shows a NOTE about the dictionary file, make the dictionary file again. Refer to [Make the Dictionary File Again](#make-the-dictionary-file-again).
+
+   NOTE: A new version of the plugin can read the PDF file more accurately. The checker can use the file that you have until you make a new file.
+
 ## Make the Dictionary File Again
 
-When ASD publishes a new issue of ASD-STE100, do these steps:
+Do these steps when ASD publishes a new issue of ASD-STE100. Also do these steps when the skill shows a NOTE about the dictionary file. In that condition, use the PDF file that you have and start at step 2.
 
 1. Get the new PDF file from `https://www.asd-ste100.org`.
 2. Write `Make the STE dictionary file again from PATH` in a session. Replace `PATH` with the path of the PDF file.
@@ -230,3 +234,13 @@ EOF
    ```
 
    NOTE: The rules of the repository accept only a merge commit. Then each PR shows as one merge commit in the `main` branch.
+
+10. Give a tag to the new version:
+
+    ```bash
+    git switch main
+    git pull
+    claude plugin tag plugins/writing-ste --push
+    ```
+
+    NOTE: The tag shows which commit has each version of the plugin.

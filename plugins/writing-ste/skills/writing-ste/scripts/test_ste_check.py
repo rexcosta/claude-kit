@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from ste_check import (GENERAL_WORDS, Dictionary, ProjectWords, check_text, default_data_folder,
+from ste_check import (BUILDER_VERSION, GENERAL_WORDS, Dictionary, ProjectWords, check_text, default_data_folder,
                        main, plural_forms, regular_verb_forms)
 
 
@@ -138,6 +138,21 @@ class StatusTest(unittest.TestCase):
         self.assertIn("FROB Issue 1", out)
         self.assertIn(str(data), out)
 
+    def test_dictionary_from_this_version_of_the_builder_gives_no_note(self):
+        _, out, _ = self.status_of(json.dumps(dict(DATA, builder=BUILDER_VERSION)))
+        self.assertTrue(out.startswith("OK: "), out)
+        self.assertNotIn("NOTE", out)
+
+    def test_dictionary_from_an_older_builder_gives_ok_and_a_note_with_the_command(self):
+        for data in (DATA, dict(DATA, builder=BUILDER_VERSION - 1)):
+            with self.subTest(builder=data.get("builder")):
+                code, out, folder = self.status_of(json.dumps(data))
+                self.assertEqual(code, 0)
+                self.assertTrue(out.startswith("OK: "), out)
+                self.assertIn("NOTE: ", out)
+                self.assertIn('python3 -I "%s" PDF "%s"' % (
+                    SCRIPTS / "build_dictionary.py", folder / "ste100-dictionary.json"), out)
+
     def test_missing_dictionary_gives_the_link_and_the_command(self):
         code, out, data = self.status_of(None)
         self.assertEqual(code, 0)
@@ -214,6 +229,11 @@ class WordTest(unittest.TestCase):
 
     def test_regular_forms_of_a_verb_that_lists_no_forms_are_approved(self):
         self.assertEqual(check("It activates the valve. It activated the cap."), [])
+
+    def test_modal_verb_has_no_regular_forms(self):
+        [f] = check("It canned the valve.")
+        self.assertEqual((f.level, f.rule), ("ERROR", "1.1"))
+        self.assertIn('"canned"', f.message)
 
     def test_approved_form_with_two_words_is_approved(self):
         self.assertEqual(check("If the light comes on, remove the cap."), [])
@@ -416,6 +436,45 @@ class MarkdownTest(unittest.TestCase):
 
     def test_quoted_text_is_not_checked(self):
         self.assertEqual(check('Open the "Frob Settings" valve.'), [])
+
+    def test_quoted_text_on_two_lines_is_not_checked(self):
+        self.assertEqual(check('Open the "Frob\nSettings" valve.'), [])
+
+    def test_text_in_single_quotation_marks_is_not_checked(self):
+        self.assertEqual(check("Open the 'Frob Settings' valve."), [])
+
+    def test_word_after_a_plural_possessive_is_checked(self):
+        [f] = check("Remove the valves' caps and the boxes' frob.")
+        self.assertIn('"frob"', f.message)
+
+    def test_inline_code_on_two_lines_is_not_checked(self):
+        self.assertEqual(check("Open `frob\nfrob` and the valve."), [])
+
+    def test_line_numbers_follow_the_source_after_inline_code_on_two_lines(self):
+        [f] = check("Open `frob\nfrob` and\nfrobnicate.")
+        self.assertEqual(f.line, 3)
+
+    def test_comment_in_a_line_is_not_checked(self):
+        self.assertEqual(check("Open the valve. <!-- frobnicate --> Remove the cap."), [])
+
+    def test_indented_code_block_is_not_checked(self):
+        self.assertEqual(check("Open the valve:\n\n    frobnicate --all\n"), [])
+
+    def test_indented_paragraph_of_a_list_item_is_checked(self):
+        [f] = check("- Open the valve.\n\n    Frobnicate the cap.\n")
+        self.assertEqual((f.rule, f.line), ("1.1", 3))
+
+    def test_table_without_a_first_pipe_has_one_sentence_in_each_cell(self):
+        row = description(15)[:-1] + " | " + description(15)[:-1]
+        self.assertEqual(check("Valve | Cap\n---|---\n" + row + "\n"), [])
+
+    def test_table_without_a_first_pipe_is_checked(self):
+        [f] = check("Valve | Cap\n---|---\nFrobnicate the valve. | Open it.\n")
+        self.assertEqual((f.rule, f.line), ("1.1", 3))
+
+    def test_text_after_a_line_of_hyphens_at_the_start_is_checked(self):
+        [f] = check("---\n\nFrobnicate the valve.\n\n---\n\nOpen the valve.\n")
+        self.assertEqual((f.rule, f.line), ("1.1", 3))
 
     def test_front_matter_is_not_checked(self):
         self.assertEqual(

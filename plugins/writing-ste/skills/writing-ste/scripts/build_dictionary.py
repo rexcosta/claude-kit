@@ -22,6 +22,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 PLUGIN_ID = "writing-ste-claude-kit"
 DICTIONARY_FILE = "ste100-dictionary.json"
+# Increase this number when a change of build_dictionary.py changes the dictionary file.
+BUILDER_VERSION = 2
 NOTICE = ("Extracted from the ASD-STE100 PDF for local checks only. "
           "Copyright ASD. Do not publish or share this file.")
 
@@ -192,13 +194,18 @@ def read_meaning(rest, col2):
 
 
 def read_note(col2):
+    """Return the first sentence of the help note of an approved word.
+
+    The note can name words in uppercase: "Do not use this word to mean ZIB, ZAB."
+    A longer uppercase line can include example text, so the note does not keep it.
+    """
     for k, line in enumerate(col2):
         if NOTE_RE.match(line):
             parts = [line]
             for later in col2[k + 1:k + 8]:
                 if parts[-1].endswith("."):
                     break
-                if not is_upper_text(later):
+                if not is_upper_text(later) or len(later.split()) <= MAX_PHRASE_WORDS:
                     parts.append(later)
             return " ".join(parts)
     return ""
@@ -327,6 +334,7 @@ def main(argv=None):
     result = {
         "source": "ASD-STE100 Issue %s, %s" % title.groups() if title else "ASD-STE100",
         "notice": NOTICE,
+        "builder": BUILDER_VERSION,
         "approved": data["approved"],
         "not_approved": data["not_approved"],
     }

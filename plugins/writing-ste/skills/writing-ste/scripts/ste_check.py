@@ -34,6 +34,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 PLUGIN_ID = "writing-ste-claude-kit"
 DICTIONARY_FILE = "ste100-dictionary.json"
+# Increase this number when a change of build_dictionary.py changes the dictionary file.
+BUILDER_VERSION = 2
 WORDS_FILE = "ste-word-list.md"
 GENERAL_WORDS = HERE.parent / "data" / WORDS_FILE
 ASD_URL = "https://www.asd-ste100.org"
@@ -48,8 +50,8 @@ TECHNICAL = {"TN": ("n", "noun", "1.5"), "TV": ("v", "verb", "1.12")}
 
 Finding = namedtuple("Finding", "level rule line message")
 
-OPAQUE = ""  # code, a URL, or quoted text: one word that is not checked
-PAREN = ""   # text in parentheses: one word in its sentence (rule 8.5)
+OPAQUE = "\ue000"  # code, a URL, or quoted text: one word that is not checked
+PAREN = "\ue001"   # text in parentheses: one word in its sentence (rule 8.5)
 
 # A word starts with a letter. Digits before or after the letter make one identifier
 # ("2FA", "STE100"). In "20-minute", the word is "minute".
@@ -64,6 +66,9 @@ SENTENCE_END_RE = re.compile(r"(?<=[.!?])\s+(?=[\"“(\[]?[A-Z0-9" + OPAQUE + r"
 UNITS = {"mm", "cm", "m", "km", "in", "ft", "kg", "g", "mg", "lb", "l", "ml", "s",
          "ms", "min", "h", "kb", "mb", "gb", "tb", "hz", "khz", "mhz", "ghz", "v",
          "a", "w", "kw", "psi", "kpa", "bar", "ohms", "%"}
+# A modal verb has only one form: there is no "musts" and no "willed".
+MODAL_VERBS = {"can", "cannot", "could", "may", "might", "must", "shall", "should",
+               "will", "would"}
 # Words that can start a condition before an instruction: "If ..., do ...".
 CONDITIONS = {"if", "when", "before", "after", "while", "until", "unless", "to",
               "for", "during", "in", "on", "at", "with", "without", "from", "as",
@@ -73,12 +78,18 @@ HEADING_RE = re.compile(r"^#{1,6}\s+(.*?)\s*#*$")
 ITEM_RE = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+(.*)$")
 FENCE_RE = re.compile(r"^\s*(`{3,}|~{3,})(.*)$")
 SEPARATOR_CELL_RE = re.compile(r"^:?-{2,}:?$")
-CODE_RE = re.compile(r"(`+)(.+?)\1")
+FRONT_MATTER_KEY_RE = re.compile(r"^[A-Za-z_][\w-]*\s*:")
+INDENT_RE = re.compile(r"^(?: {4,}|\t)")
+CODE_RE = re.compile(r"(`+)(.+?)\1", re.S)
+COMMENT_RE = re.compile(r"<!--.*?-->", re.S)
 IMAGE_RE = re.compile(r"!\[[^\]]*\]\([^)]*\)")
 LINK_RE = re.compile(r"\[([^\]]*)\]\([^)]*\)")
 URL_RE = re.compile(r"<?https?://[^\s>)]+>?")
 TAG_RE = re.compile(r"</?[A-Za-z][^>]*>")
 QUOTE_RE = re.compile(r"\"[^\"]*\"|“[^”]*”")
+# An apostrophe has a letter before it or after it ("the valve's cap", "the valves' caps").
+SINGLE_QUOTE_RE = re.compile(r"(?<![A-Za-z0-9])'[^'\n]*'(?![A-Za-z0-9])"
+                             r"|‘[^’\n]*’(?![A-Za-z0-9])")
 EMPHASIS_RE = re.compile(r"\*\*|__|(?<![A-Za-z0-9])[*_]|[*_](?![A-Za-z0-9])")
 
 
@@ -136,10 +147,13 @@ class Dictionary:
 
     def __init__(self, data):
         self.source = data.get("source") or "ASD-STE100"
+        # A file from before the builder had versions has no version.
+        builder = data.get("builder")
+        self.builder = builder if isinstance(builder, int) else 1
         self.approved, self.phrases, self.not_approved, self.verbs = {}, {}, {}, set()
         for e in data["approved"]:
             forms = [e["word"]] + list(e.get("forms") or [])
-            if e["pos"] == "v" and not e.get("forms"):
+            if e["pos"] == "v" and not e.get("forms") and e["word"] not in MODAL_VERBS:
                 forms += regular_verb_forms(e["word"])
             if e["pos"] == "n":
                 forms += plural_forms(e["word"])
@@ -209,15 +223,18 @@ def dictionary_error(path, missing):
     else:
         first = ("ERROR: The dictionary file is not correct: %s\n\n"
                  "Make the dictionary file again." % path)
-    return "\n".join([
-        first,
-        "",
+    return "\n".join([first, ""] + build_steps(path))
+
+
+def build_steps(path):
+    """Return the steps that make the dictionary file at this path."""
+    return [
         "1. Get the ASD-STE100 PDF file from %s." % ASD_URL,
         "2. On a Mac, use this command:",
         '   python3 -I "%s" PDF "%s"' % (HERE / "build_dictionary.py", path),
         "   NOTE: Replace PDF with the path of the PDF file.",
         "3. Use the skill again.",
-    ])
+    ]
 
 
 def load_dictionary(path):
@@ -241,12 +258,18 @@ def load_dictionary(path):
 
 
 def status(data):
+    path = data / DICTIONARY_FILE
     try:
-        dictionary = load_dictionary(data / DICTIONARY_FILE)
+        dictionary = load_dictionary(path)
     except DictionaryError as e:
         return str(e)
-    return "OK: The ASD-STE100 dictionary is installed. Source: %s. Data folder: %s" % (
-        dictionary.source, data)
+    lines = ["OK: The ASD-STE100 dictionary is installed. Source: %s. Data folder: %s" % (
+        dictionary.source, data)]
+    if dictionary.builder < BUILDER_VERSION:
+        lines += ["", "NOTE: This version of the plugin makes a more accurate dictionary file. The"
+                  " checker can use the file that you have. To make a new file, do these steps:",
+                  ""] + build_steps(path)
+    return "\n".join(lines)
 
 
 class ProjectWords:
@@ -361,7 +384,9 @@ class Block:
 def markdown_blocks(text):
     lines = text.splitlines()
     start = 0
-    if lines and lines[0].strip() == "---":
+    # Front matter starts with a key. A line of hyphens before other text is a rule.
+    if (len(lines) > 1 and lines[0].strip() == "---"
+            and FRONT_MATTER_KEY_RE.match(lines[1])):
         for j in range(1, len(lines)):
             if lines[j].strip() in ("---", "..."):
                 start = j + 1
@@ -369,6 +394,8 @@ def markdown_blocks(text):
     blocks, current, last_row = [], None, []
     fence = ""  # the characters that opened the code block, while the checker is in it
     comment = False
+    in_list = False  # an indented line after a list item is text of the item, not code
+    table = False    # the checker is in a table that has no pipe at the start of its lines
     for index in range(start, len(lines)):
         number, raw = index + 1, lines[index]
         s = raw.strip()
@@ -390,14 +417,33 @@ def markdown_blocks(text):
             comment, current = "-->" not in s, None
             continue
         if not s:
-            current = None
+            current, table = None, False
             continue
+        if current is None and not in_list and INDENT_RE.match(raw):
+            continue  # an indented code block
         heading = HEADING_RE.match(s)
         if heading:
             blocks.append(Block("heading", [(number, heading.group(1))]))
-            current = None
+            current, in_list, table = None, False, False
             continue
+        if "|" in s and not s.startswith("|"):
+            cells = [c.strip() for c in s.split("|")]
+            if (any(cells) and all(SEPARATOR_CELL_RE.match(c) for c in cells if c)
+                    and current is not None and current.kind == "paragraph"
+                    and len(current.lines) == 1 and "|" in current.lines[0][1]):
+                # The paragraph before this line is the header row of a table.
+                first, header = current.lines[0]
+                blocks.pop()
+                blocks += [Block("header", [(first, c.strip())])
+                           for c in header.split("|") if c.strip()]
+                current, in_list, table = None, False, True
+                continue
+            if table:
+                blocks += [Block("cell", [(number, c)]) for c in cells if c]
+                continue
+        table = False
         if s.startswith("|"):
+            in_list = False
             cells = [c.strip() for c in s.strip("|").split("|")]
             if any(cells) and all(SEPARATOR_CELL_RE.match(c) for c in cells if c):
                 for block in last_row:
@@ -416,7 +462,9 @@ def markdown_blocks(text):
         if item:
             current = Block("item", [(number, item.group(1))])
             blocks.append(current)
+            in_list = True
         elif current is None:
+            in_list = in_list and bool(INDENT_RE.match(raw))
             current = Block("paragraph", [(number, s)])
             blocks.append(current)
         else:
@@ -424,17 +472,31 @@ def markdown_blocks(text):
     return blocks
 
 
-def mask(line):
-    """Hide the parts of a line that the checker does not check."""
-    line = CODE_RE.sub(OPAQUE, line)
-    line = IMAGE_RE.sub("", line)
-    line = LINK_RE.sub(r"\1", line)
-    line = URL_RE.sub(OPAQUE, line)
-    line = TAG_RE.sub(" ", line)
-    line = unescape(line)
-    line = QUOTE_RE.sub(OPAQUE, line)
-    line = EMPHASIS_RE.sub("", line)
-    return line.replace("\\", "")
+def keep_lines(replacement):
+    """Return a replacement for re.sub that keeps the number of lines of the text."""
+    def replace(m):
+        new = m.expand(replacement)
+        return new + "\n" * (m.group().count("\n") - new.count("\n"))
+    return replace
+
+
+def mask(text):
+    """Hide the parts of the text of a block that the checker does not check.
+
+    Code, a link, or quoted text can continue on the next line of the block. The
+    result has the same number of lines as the text.
+    """
+    text = CODE_RE.sub(keep_lines(OPAQUE), text)
+    text = COMMENT_RE.sub(keep_lines(""), text)
+    text = IMAGE_RE.sub(keep_lines(""), text)
+    text = LINK_RE.sub(keep_lines(r"\1"), text)
+    text = URL_RE.sub(OPAQUE, text)
+    text = TAG_RE.sub(keep_lines(" "), text)
+    text = unescape(text)
+    text = QUOTE_RE.sub(keep_lines(OPAQUE), text)
+    text = SINGLE_QUOTE_RE.sub(OPAQUE, text)
+    text = EMPHASIS_RE.sub("", text)
+    return text.replace("\\", "")
 
 
 def normalize(token):
@@ -625,8 +687,8 @@ def check_text(text, dictionary, words):
     verbs = dictionary.verbs | words.verbs
     for block in markdown_blocks(text):
         joined, starts, tokens = "", [], []
-        for number, raw in block.lines:
-            masked = mask(raw)
+        masked_lines = mask("\n".join(raw for _, raw in block.lines)).split("\n")
+        for (number, _), masked in zip(block.lines, masked_lines):
             for _ in re.finditer(";", masked):
                 findings.append(Finding("ERROR", "8.1", number, "Do not use a semicolon."
                                         " Write two sentences."))

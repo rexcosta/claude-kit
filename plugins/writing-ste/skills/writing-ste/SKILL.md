@@ -14,6 +14,7 @@ allowed-tools:
 Examine the status above before you do the procedure:
 
 - If the status starts with `OK`, do the procedure.
+- If the status has a `NOTE` about the dictionary file, do the procedure. Then show the `NOTE` to the user.
 - If the status is `[shell command execution disabled by policy]`, get the status with this command: `python3 -I "${CLAUDE_SKILL_DIR}/scripts/ste_check.py" --status --data "${CLAUDE_PLUGIN_DATA}"`
 - If the status starts with `ERROR`, do these steps:
   1. If the user gave you the path of the ASD-STE100 PDF file, make the dictionary file. Use the command in the section "Data". Then get the status again.
@@ -91,5 +92,5 @@ Examine the text for these errors:
 
 - `${CLAUDE_PLUGIN_DATA}/ste100-dictionary.json` contains the words of the ASD-STE100 dictionary. ASD has the copyright. Do not publish this file or parts of it.
 - To make the dictionary file, use this command: `python3 -I "${CLAUDE_SKILL_DIR}/scripts/build_dictionary.py" PDF "${CLAUDE_PLUGIN_DATA}/ste100-dictionary.json"`. Replace `PDF` with the path of the ASD-STE100 PDF file.
-- When ASD publishes a new issue, make the dictionary file again with the same command.
+- When ASD publishes a new issue, make the dictionary file again with the same command. Also do this when the status has a `NOTE` about the dictionary file.
 - To do a test of the scripts, use this command: `python3 -m unittest discover -s "${CLAUDE_SKILL_DIR}/scripts"`
